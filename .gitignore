@@ -1,0 +1,9 @@
+health.db
+health.db-shm
+health.db-wal
+seed_data.json
+server.py
+start.command
+backend-gas/
+__pycache__/
+.DS_Store

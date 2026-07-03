@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>健康记录</title>
+<meta name="theme-color" content="#1c5cab">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="健康记录">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="sticky-top">
+  <header class="page-header">
+    <h1 id="page-title">摄入记录</h1>
+  </header>
+  <div class="save-bar" id="save-bar">
+    <span id="save-status">已保存</span>
+    <button id="save-btn">保存</button>
+  </div>
+</div>
+
+<div id="app-loading" class="app-loading">加载中…</div>
+
+<main id="app-root" style="display:none;">
+
+  <!-- 记录页 -->
+  <section class="view" data-view="record">
+    <div class="date-nav">
+      <button id="date-prev" aria-label="前一天">‹</button>
+      <input type="date" id="date-picker">
+      <button id="date-next" aria-label="后一天">›</button>
+      <button id="date-today-btn" class="today-btn">回到今天</button>
+    </div>
+
+    <div class="hero-card">
+      <div class="hero-label">今日热量赤字</div>
+      <div class="hero-value" id="hero-value">0<span class="unit">kcal</span></div>
+      <div class="hero-sub">
+        <span>总摄入 <b id="hero-intake">0</b> kcal</span>
+        <span>消耗 <b id="hero-burn">0</b> kcal</span>
+        <span>基准 <b id="hero-budget">1600</b> kcal</span>
+        <span>蛋白质 <b id="hero-protein">0</b> g</span>
+      </div>
+    </div>
+
+    <div id="meal-cards"></div>
+
+    <div class="field-card">
+      <div class="field-item">
+        <label for="field-burn">消耗（运动，kcal）</label>
+        <input type="number" inputmode="decimal" id="field-burn" placeholder="0">
+      </div>
+    </div>
+  </section>
+
+  <!-- 历史页 -->
+  <section class="view" data-view="history">
+    <div class="range-row">
+      <button data-range="7">近7天</button>
+      <button data-range="30" class="active">近30天</button>
+      <button data-range="90">近90天</button>
+      <button data-range="all">全部</button>
+    </div>
+
+    <div class="kpi-row" id="kpi-row"></div>
+
+    <div class="chart-card" id="chart-card" style="position:relative;">
+      <div class="chart-legend">
+        <span><span class="dot" style="background:var(--series-blue)"></span>达成赤字（摄入低于消耗预算）</span>
+        <span><span class="dot" style="background:var(--series-red)"></span>超支（摄入高于消耗预算）</span>
+      </div>
+      <div id="chart-scroll" style="overflow-x:auto;">
+        <div id="chart-svg-wrap"></div>
+      </div>
+      <div class="chart-tooltip" id="chart-tooltip"></div>
+    </div>
+
+    <button class="toggle-table-btn" id="toggle-table-btn">查看数据表 ▼</button>
+    <div id="history-table-wrap" style="display:none;"></div>
+  </section>
+
+  <!-- 设置页 -->
+  <section class="view" data-view="settings">
+    <div class="settings-section">
+      <h2>每日消耗基准</h2>
+      <div class="settings-field">
+        <label for="setting-base">基础代谢（kcal）</label>
+        <input type="number" id="setting-base">
+      </div>
+      <div class="settings-field">
+        <label for="setting-extra">消化产热 + 家务活动（kcal）</label>
+        <input type="number" id="setting-extra">
+      </div>
+      <div class="settings-sum" id="setting-sum"></div>
+    </div>
+
+    <div class="settings-section">
+      <h2>数据管理</h2>
+      <button class="settings-btn" id="export-btn">导出备份（JSON）</button>
+      <label class="settings-btn" style="display:block;text-align:center;cursor:pointer;">
+        导入备份（JSON）
+        <input type="file" id="import-input" accept="application/json" style="display:none;">
+      </label>
+      <button class="settings-btn danger" id="clear-btn">清空全部数据</button>
+      <p class="settings-note">数据保存在 Google Sheet 里（通过 Google Apps Script 读写），只要能联网，手机/iPad/Mac 打开同一个地址看到的都是同一份，不需要和电脑连同一个 WiFi。改动后记得点顶部的「保存」，看到「已保存」才算真正写进去了。</p>
+    </div>
+
+    <div class="settings-section">
+      <h2>后端连接</h2>
+      <button class="settings-btn" id="reset-api-btn">重新设置后端地址/密码</button>
+      <p class="settings-note">首次在新设备/新浏览器打开时会自动问一次后端地址和密码；如果输错了或者以后换了新的 Apps Script 部署，点这个按钮重新输入。</p>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<nav class="tab-bar">
+  <button data-tab="record" class="active"><span class="tab-icon">🍽️</span>记录</button>
+  <button data-tab="history"><span class="tab-icon">📈</span>历史</button>
+  <button disabled><span class="tab-icon">🏋️</span>重训（即将上线）</button>
+  <button data-tab="settings"><span class="tab-icon">⚙️</span>设置</button>
+</nav>
+
+<script src="app.js"></script>
+<script src="intake.js"></script>
+<script src="history.js"></script>
+<script src="settings.js"></script>
+</body>
+</html>
