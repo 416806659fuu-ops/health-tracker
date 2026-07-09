@@ -9,7 +9,7 @@ const MEALS = [
 const CATEGORIES = [
   { key: 'protein', label: '蛋白质', color: 'var(--series-blue)' },
   { key: 'carb', label: '碳水', color: 'var(--series-aqua)' },
-  { key: 'fat', label: '脂肪', color: 'var(--series-yellow)' },
+  { key: 'fiber', label: '膳食纤维', color: 'var(--series-green)' },
 ];
 
 function categoryInfo(key) {
@@ -19,6 +19,25 @@ function categoryInfo(key) {
 const pendingCategory = { breakfast: 'protein', lunch: 'protein', dinner: 'protein', snack: 'protein' };
 
 let currentDate = todayKey();
+
+// 用真实时间判断"现在是哪一餐"，只有这一餐默认展开完整录入界面，
+// 已经过去的餐次收起来只显示合计卡路里/蛋白质，点"编辑记录"才展开。
+// 手动点开的记录在 expandedMeals 里记一下，同一次浏览里保持展开。
+const expandedMeals = {};
+
+function currentMealKey() {
+  const h = new Date().getHours() + new Date().getMinutes() / 60;
+  if (h >= 4 && h < 10.5) return 'breakfast';
+  if (h >= 10.5 && h < 15) return 'lunch';
+  if (h >= 15 && h < 21) return 'dinner';
+  return 'snack'; // 21:00 到次日 4:00
+}
+
+function isMealExpanded(mealKey) {
+  if (currentDate !== todayKey()) return true; // 看的不是今天，全部展开
+  if (mealKey === currentMealKey()) return true; // 当前时段
+  return !!expandedMeals[mealKey];
+}
 
 function emptyDay() {
   return {
@@ -116,6 +135,12 @@ function initRecord() {
     const addBtn = e.target.closest('.add-btn');
     if (addBtn) {
       addFoodItem(addBtn.dataset.meal);
+      return;
+    }
+    const editBtn = e.target.closest('.meal-edit-btn');
+    if (editBtn) {
+      expandedMeals[editBtn.dataset.meal] = true;
+      renderMealCard(editBtn.dataset.meal);
     }
   });
   container.addEventListener('input', (e) => {
@@ -211,7 +236,16 @@ function renderMealCard(mealKey) {
   listEl.querySelectorAll('.food-item').forEach((row, i) => {
     row.querySelector('.cat-label').textContent = categoryInfo(items[i].category).label;
   });
-  card.querySelector('.meal-total').textContent = `${fmt(mealTotal(day, mealKey))} kcal`;
+
+  const total = mealTotal(day, mealKey);
+  const protein = items.reduce((s, it) => s + (Number(it.protein) || 0), 0);
+  card.querySelector('.meal-total').textContent = `${fmt(total)} kcal`;
+
+  const expanded = isMealExpanded(mealKey);
+  card.classList.toggle('collapsed', !expanded);
+  if (!expanded) {
+    card.querySelector('.meal-summary-text').textContent = `${fmt(total)} kcal · ${fmt(protein)}g蛋白`;
+  }
 }
 
 function renderRecord() {
@@ -226,6 +260,10 @@ function renderRecord() {
         <div class="meal-card-head">
           <span class="meal-name">${m.label}</span>
           <span class="meal-total">0 kcal</span>
+        </div>
+        <div class="meal-summary">
+          <span class="meal-summary-text"></span>
+          <button class="meal-edit-btn" data-meal="${m.key}">编辑记录</button>
         </div>
         <div class="food-list"></div>
         <div class="add-row">
