@@ -29,22 +29,14 @@
 
 <main id="app-root" style="display:none;">
 
-  <!-- 记录页 -->
+  <!-- 记录页：只做"现在进行时"，不提供翻看以往日期的入口 -->
   <section class="view" data-view="record">
-    <div class="date-nav">
-      <button id="date-prev" aria-label="前一天">‹</button>
-      <input type="date" id="date-picker">
-      <button id="date-next" aria-label="后一天">›</button>
-      <button id="date-today-btn" class="today-btn">回到今天</button>
-    </div>
+    <div class="today-label" id="today-label"></div>
 
     <div class="hero-card">
       <div class="hero-label">今日热量赤字</div>
       <div class="hero-value" id="hero-value">0<span class="unit">kcal</span></div>
       <div class="hero-sub">
-        <span>总摄入 <b id="hero-intake">0</b> kcal</span>
-        <span>消耗 <b id="hero-burn">0</b> kcal</span>
-        <span>基准 <b id="hero-budget">1600</b> kcal</span>
         <span>蛋白质 <b id="hero-protein">0</b> g</span>
       </div>
     </div>
@@ -59,30 +51,57 @@
     </div>
   </section>
 
-  <!-- 历史页 -->
+  <!-- 历史页：按月查看，以往的记录都在这里翻 -->
   <section class="view" data-view="history">
-    <div class="range-row">
-      <button data-range="7">近7天</button>
-      <button data-range="30" class="active">近30天</button>
-      <button data-range="90">近90天</button>
-      <button data-range="all">全部</button>
+    <div class="month-nav">
+      <button id="month-prev" aria-label="上个月">‹</button>
+      <span class="month-label" id="month-label"></span>
+      <button id="month-next" aria-label="下个月">›</button>
     </div>
 
     <div class="kpi-row" id="kpi-row"></div>
 
-    <div class="chart-card" id="chart-card" style="position:relative;">
-      <div class="chart-legend">
-        <span><span class="dot" style="background:var(--series-blue)"></span>达成赤字（摄入低于消耗预算）</span>
-        <span><span class="dot" style="background:var(--series-red)"></span>超支（摄入高于消耗预算）</span>
+    <div class="calendar-card">
+      <div class="calendar-weekdays">
+        <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
       </div>
-      <div id="chart-scroll" style="overflow-x:auto;">
-        <div id="chart-svg-wrap"></div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+      <div class="calendar-legend">
+        <span><span class="dot" style="background:var(--series-blue)"></span>达成赤字</span>
+        <span><span class="dot" style="background:var(--series-red)"></span>超支</span>
+        <span><span class="dot" style="background:var(--gridline)"></span>无记录</span>
       </div>
-      <div class="chart-tooltip" id="chart-tooltip"></div>
+    </div>
+  </section>
+
+  <!-- 重训页 -->
+  <section class="view" data-view="strength">
+    <div class="split-switch" id="split-switch">
+      <button data-split="A">A 训练计划</button>
+      <button data-split="B">B 训练计划</button>
     </div>
 
-    <button class="toggle-table-btn" id="toggle-table-btn">查看数据表 ▼</button>
-    <div id="history-table-wrap" style="display:none;"></div>
+    <!-- 训练模式：一屏只有当前这一组 -->
+    <div id="strength-session">
+      <div id="session-head"></div>
+      <div class="progress-bar" id="session-progress"></div>
+      <div id="session-body"></div>
+    </div>
+
+    <!-- 表单模式：补记和改错 -->
+    <div id="strength-form" style="display:none;">
+      <div class="hero-card">
+        <div class="hero-label">今日训练容量</div>
+        <div class="hero-value" id="s-hero-value">0<span class="unit">kg·次</span></div>
+        <div class="hero-sub">
+          <span>动作 <b id="s-hero-moves">0</b></span>
+          <span>组数 <b id="s-hero-sets">0</b></span>
+          <span>总次数 <b id="s-hero-reps">0</b></span>
+        </div>
+      </div>
+      <div id="exercise-cards"></div>
+      <button class="pill wide" id="back-to-session-btn" style="display:none;">返回训练模式</button>
+    </div>
   </section>
 
   <!-- 设置页 -->
@@ -98,6 +117,12 @@
         <input type="number" id="setting-extra">
       </div>
       <div class="settings-sum" id="setting-sum"></div>
+    </div>
+
+    <div class="settings-section">
+      <h2>训练项目</h2>
+      <button class="settings-btn" id="open-catalog-btn">编辑 A / B 训练计划</button>
+      <p class="settings-note">设定每个计划里练什么、多重、每次加减多少、几组。</p>
     </div>
 
     <div class="settings-section">
@@ -120,18 +145,56 @@
 
 </main>
 
+<!-- 训练项目编辑页：A / B 两套计划里各练什么 -->
+<div id="catalog-page" class="detail-overlay" style="display:none;">
+  <div class="detail-header">
+    <button id="catalog-back" aria-label="返回">‹</button>
+    <h2>训练项目</h2>
+  </div>
+  <div class="detail-body">
+    <div id="catalog-list"></div>
+    <div class="catalog-add">
+      <input type="text" id="catalog-new-name" placeholder="新项目名称" autocomplete="off">
+      <select id="catalog-new-split">
+        <option value="A">A 计划</option>
+        <option value="B">B 计划</option>
+      </select>
+      <button id="catalog-add-btn">+</button>
+    </div>
+    <button class="settings-btn" id="seed-catalog-btn">载入预设项目（A 计划 4 项 + B 计划 4 项）</button>
+    <p class="settings-note">点任意一行进入该项目的设置：重量、每次加减多少、热身组数、正式组数。腿部和肩背的加减幅度差别很大，所以每个项目各自设定。「归档」的项目不再出现在训练页，但历史记录还留着。</p>
+  </div>
+</div>
+
+<!-- 提前结束训练的确认弹窗（在手机界面内，不用浏览器原生 confirm） -->
+<div id="finish-confirm" class="rest-overlay" style="display:none;">
+  <div class="finish-confirm-text" id="finish-confirm-text"></div>
+  <button class="pill wide primary" id="finish-confirm-yes">确认结束</button>
+  <button class="pill wide" id="finish-confirm-no">继续训练</button>
+</div>
+
+<!-- 单个动作的详情设置页，从训练项目列表点进来 -->
+<div id="exercise-detail" class="detail-overlay" style="display:none;">
+  <div class="detail-header">
+    <button id="detail-back" aria-label="返回">‹</button>
+    <h2 id="detail-title"></h2>
+  </div>
+  <div id="detail-body" class="detail-body"></div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <nav class="tab-bar">
   <button data-tab="record" class="active"><span class="tab-icon">🍽️</span>记录</button>
   <button data-tab="history"><span class="tab-icon">📈</span>历史</button>
-  <button disabled><span class="tab-icon">🏋️</span>重训（即将上线）</button>
   <button data-tab="settings"><span class="tab-icon">⚙️</span>设置</button>
 </nav>
 
 <script src="app.js"></script>
 <script src="intake.js"></script>
 <script src="history.js"></script>
+<script src="strength.js"></script>
+<script src="session.js"></script>
 <script src="settings.js"></script>
 </body>
 </html>

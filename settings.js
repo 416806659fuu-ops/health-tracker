@@ -27,6 +27,13 @@ function renderRecordSafely() {
   if (window.renderRecord) window.renderRecord();
 }
 
+// 整份 state 被换掉之后（导入/清空），把每个页面都重画一遍
+function renderAllViews() {
+  renderSettings();
+  renderRecordSafely();
+  if (window.renderStrength) window.renderStrength();
+}
+
 function updateSettingsSum() {
   const sum = (state.settings.baseMetabolism || 0) + (state.settings.extraBase || 0);
   document.getElementById('setting-sum').textContent = `合计（每日消耗基准）：${sum} kcal`;
@@ -58,9 +65,9 @@ function importData(e) {
       const parsed = JSON.parse(reader.result);
       if (!parsed.intake || !parsed.settings) throw new Error('格式不对');
       if (!confirm('导入将覆盖服务器上当前所有数据，确定继续吗？')) return;
-      state = parsed;
-      renderSettings();
-      renderRecordSafely();
+      // 老备份里没有 strength 字段，补齐后再用，否则重训页会拿到 undefined
+      state = mergeIntoDefaults(parsed);
+      renderAllViews();
       await syncToServer();
       showToast('导入成功，已保存到服务器');
     } catch (err) {
@@ -72,10 +79,9 @@ function importData(e) {
 }
 
 async function clearData() {
-  if (!confirm('将清空服务器上保存的所有摄入记录，且无法恢复，确定吗？')) return;
+  if (!confirm('将清空服务器上保存的所有摄入记录、重训记录和动作库，且无法恢复，确定吗？')) return;
   state = defaultState();
-  renderSettings();
-  renderRecordSafely();
+  renderAllViews();
   await syncToServer();
   showToast('已清空全部数据');
 }

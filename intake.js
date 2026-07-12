@@ -18,7 +18,8 @@ function categoryInfo(key) {
 
 const pendingCategory = { breakfast: 'protein', lunch: 'protein', dinner: 'protein', snack: 'protein' };
 
-let currentDate = todayKey();
+// 记录页只做"现在进行时"，不再支持翻看以往日期——以往的记录去历史页看。
+// 所以这里不需要一个可变的 currentDate，每次都直接用当下的 todayKey()。
 
 // 用真实时间判断"现在是哪一餐"，只有这一餐默认展开完整录入界面，
 // 已经过去的餐次收起来只显示合计卡路里/蛋白质，点"编辑记录"才展开。
@@ -27,14 +28,13 @@ const expandedMeals = {};
 
 function currentMealKey() {
   const h = new Date().getHours() + new Date().getMinutes() / 60;
-  if (h >= 4 && h < 10.5) return 'breakfast';
-  if (h >= 10.5 && h < 15) return 'lunch';
-  if (h >= 15 && h < 21) return 'dinner';
-  return 'snack'; // 21:00 到次日 4:00
+  if (h >= 5 && h < 11) return 'breakfast';
+  if (h >= 11.5 && h < 15) return 'lunch';
+  if (h >= 17 && h < 21) return 'dinner';
+  return 'snack'; // 11:00-11:30、15:00-17:00、21:00-次日5:00 都算加餐
 }
 
 function isMealExpanded(mealKey) {
-  if (currentDate !== todayKey()) return true; // 看的不是今天，全部展开
   if (mealKey === currentMealKey()) return true; // 当前时段
   return !!expandedMeals[mealKey];
 }
@@ -95,32 +95,13 @@ function updateCatToggleButton(mealKey) {
 }
 
 function initRecord() {
-  document.getElementById('date-prev').addEventListener('click', () => {
-    currentDate = addDays(currentDate, -1);
-    renderRecord();
-  });
-  document.getElementById('date-next').addEventListener('click', () => {
-    currentDate = addDays(currentDate, 1);
-    renderRecord();
-  });
-  document.getElementById('date-today-btn').addEventListener('click', () => {
-    currentDate = todayKey();
-    renderRecord();
-  });
-  document.getElementById('date-picker').addEventListener('change', (e) => {
-    if (e.target.value) {
-      currentDate = e.target.value;
-      renderRecord();
-    }
-  });
-
   const container = document.getElementById('meal-cards');
   container.addEventListener('click', (e) => {
     const delBtn = e.target.closest('.food-del');
     if (delBtn) {
       const mealKey = delBtn.dataset.meal;
       const id = delBtn.dataset.id;
-      const day = ensureDay(currentDate);
+      const day = ensureDay(todayKey());
       day.meals[mealKey] = day.meals[mealKey].filter((it) => it.id !== id);
       markDirty();
       renderMealCard(mealKey);
@@ -165,7 +146,7 @@ function initRecord() {
   });
 
   document.getElementById('field-burn').addEventListener('input', (e) => {
-    const day = ensureDay(currentDate);
+    const day = ensureDay(todayKey());
     const v = e.target.value;
     day.burn = v === '' ? null : Number(v);
     markDirty();
@@ -183,7 +164,7 @@ function addFoodItem(mealKey) {
     return;
   }
   const protein = proteinInput.value === '' ? 0 : evalCalExpr(proteinInput.value) ?? 0;
-  const day = ensureDay(currentDate);
+  const day = ensureDay(todayKey());
   day.meals[mealKey].push({ id: uid(), category: pendingCategory[mealKey], cal, protein });
   markDirty();
 
@@ -200,23 +181,18 @@ function addFoodItem(mealKey) {
 }
 
 function renderHero() {
-  const day = getDay(currentDate);
-  const intake = totalIntake(day);
-  const burn = Number(day.burn) || 0;
+  const day = getDay(todayKey());
   const deficit = dayDeficit(day);
   const heroValue = document.getElementById('hero-value');
   heroValue.innerHTML = `${fmt(deficit)}<span class="unit">kcal</span>`;
   heroValue.className = 'hero-value ' + (deficit >= 0 ? 'good' : 'critical');
-  document.getElementById('hero-intake').textContent = fmt(intake);
-  document.getElementById('hero-burn').textContent = fmt(burn);
-  document.getElementById('hero-budget').textContent = fmt(baselineTotal());
   document.getElementById('hero-protein').textContent = fmt(dayProteinTotal(day));
 
   document.getElementById('field-burn').value = day.burn ?? '';
 }
 
 function renderMealCard(mealKey) {
-  const day = getDay(currentDate);
+  const day = getDay(todayKey());
   const card = document.querySelector(`.meal-card[data-meal="${mealKey}"]`);
   const listEl = card.querySelector('.food-list');
   const items = day.meals[mealKey];
@@ -248,9 +224,12 @@ function renderMealCard(mealKey) {
   }
 }
 
+const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+
 function renderRecord() {
-  document.getElementById('date-picker').value = currentDate;
-  document.getElementById('date-today-btn').style.display = currentDate === todayKey() ? 'none' : 'block';
+  const now = new Date();
+  document.getElementById('today-label').textContent =
+    `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 · 星期${WEEKDAY_LABELS[now.getDay()]}`;
 
   const container = document.getElementById('meal-cards');
   if (!container.dataset.built) {

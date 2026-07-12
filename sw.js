@@ -6,6 +6,8 @@ const ASSETS = [
   './app.js',
   './intake.js',
   './history.js',
+  './strength.js',
+  './session.js',
   './settings.js',
   './manifest.json',
 ];
