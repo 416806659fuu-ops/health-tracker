@@ -40,7 +40,11 @@ function emptyDay() {
 }
 
 function getDay(dateKey) {
-  return state.intake.days[dateKey] || emptyDay();
+  const raw = state.intake.days[dateKey];
+  if (!raw) return emptyDay();
+  // 有些老记录可能是在加餐时段/字段存在之前写入的，meals 里缺某个键；
+  // 跟 mergeIntoDefaults() 补全顶层结构一样的思路，这里也补全成4餐都在。
+  return { meals: Object.assign(emptyDay().meals, raw.meals), burn: raw.burn ?? null };
 }
 
 function ensureDay(dateKey) {
