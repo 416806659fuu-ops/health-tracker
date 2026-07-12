@@ -301,7 +301,34 @@ function switchView(name) {
   if (name === 'settings' && window.renderSettings) window.renderSettings();
   if (name === 'record' && window.renderRecord) window.renderRecord();
   if (name === 'strength' && window.renderStrength) window.renderStrength();
+  requestAnimationFrame(fitFlatViewHeight);
 }
+
+// 记录页/历史页要求整页不滑动、内容收在屏幕里——跟重训页同样的思路
+// （见 session.js 的 fitSessionHeight）：算死的 calc() 遇到离线提示条换行、
+// 各手机安全区高度不同就会不准，所以改成实测剩余高度再写死。
+// 设置/重训页不需要这个限制，保持原来能滑动的样子。
+function fitFlatViewHeight() {
+  const active = document.querySelector('.view.active');
+  if (!active) return;
+  if (active.dataset.view !== 'record' && active.dataset.view !== 'history') {
+    active.style.height = '';
+    return;
+  }
+  const frame = document.getElementById('phone-screen'); // 预览壳里量壳内高度，真机上量视口
+  const viewportH = frame ? frame.clientHeight : window.innerHeight;
+  const stickyTop = document.querySelector('.sticky-top');
+  const tabBar = document.querySelector('.tab-bar');
+  const mainEl = document.getElementById('app-root');
+  const topH = stickyTop ? stickyTop.offsetHeight : 0;
+  const tabH = tabBar ? tabBar.offsetHeight : 0;
+  const mainStyle = mainEl ? getComputedStyle(mainEl) : null;
+  const mainPad = mainStyle ? parseFloat(mainStyle.paddingTop) + parseFloat(mainStyle.paddingBottom) : 0;
+  active.style.height = `${Math.max(200, viewportH - topH - tabH - mainPad)}px`;
+}
+
+window.addEventListener('resize', () => requestAnimationFrame(fitFlatViewHeight));
+window.addEventListener('orientationchange', () => setTimeout(() => requestAnimationFrame(fitFlatViewHeight), 120));
 
 async function boot() {
   await bootState();

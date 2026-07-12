@@ -10,6 +10,65 @@ function initHistory() {
     historyMonth = shiftMonth(historyMonth, 1);
     renderHistory();
   });
+  document.getElementById('calendar-grid').addEventListener('click', (e) => {
+    const cell = e.target.closest('.cal-day');
+    if (!cell || !cell.dataset.date) return;
+    openDayDetail(cell.dataset.date);
+  });
+  document.getElementById('day-detail-back').addEventListener('click', () => {
+    document.getElementById('day-detail').style.display = 'none';
+  });
+}
+
+// 点日历里的某一天，只读地看那天吃了什么——跟记录页同一套 meal-card 外观，
+// 但没有加/删/改的控件，纯展示。
+function openDayDetail(dateKey) {
+  document.getElementById('day-detail-title').textContent = dateKey;
+  const day = getDay(dateKey);
+  const deficit = dayDeficit(day);
+  const protein = dayProteinTotal(day);
+
+  let html = `
+    <div class="hero-card">
+      <div class="hero-duo">
+        <div class="hero-item">
+          <div class="hero-value ${deficit >= 0 ? 'good' : 'critical'}">${fmt(deficit)}<span class="unit">kcal</span></div>
+          <div class="hero-label">热量赤字</div>
+        </div>
+        <div class="hero-item">
+          <div class="hero-value">${fmt(protein)}<span class="unit">g</span></div>
+          <div class="hero-label">蛋白质摄入</div>
+        </div>
+      </div>
+    </div>`;
+
+  MEALS.forEach((m) => {
+    const items = day.meals[m.key];
+    const total = mealTotal(day, m.key);
+    const rows = items
+      .map((it) => {
+        const info = categoryInfo(it.category);
+        return `
+        <div class="food-item readonly">
+          <span class="cat-dot" style="background:${info.color}"></span>
+          <span class="cat-label">${info.label}</span>
+          <span class="food-cal">${fmt(it.cal)} kcal</span>
+          <span class="food-protein">${fmt(Number(it.protein) || 0)}g蛋白</span>
+        </div>`;
+      })
+      .join('') || `<p class="empty-note">没有记录</p>`;
+    html += `
+      <div class="meal-card readonly">
+        <div class="meal-card-head">
+          <span class="meal-name">${m.label}</span>
+          <span class="meal-total">${fmt(total)} kcal</span>
+        </div>
+        <div class="food-list">${rows}</div>
+      </div>`;
+  });
+
+  document.getElementById('day-detail-body').innerHTML = html;
+  document.getElementById('day-detail').style.display = 'block';
 }
 
 function shiftMonth(ym, delta) {
@@ -81,10 +140,14 @@ function renderCalendar(rows, y, m) {
       cls += ' nodata';
     }
     const deficitText = r.hasData ? Math.round(r.deficit) : '';
-    cells += `<div class="${cls}"><span class="cal-day-num">${r.day}</span><span class="cal-day-val">${deficitText}</span></div>`;
+    cells += `<div class="${cls}" data-date="${r.date}"><span class="cal-day-num">${r.day}</span><span class="cal-day-val">${deficitText}</span></div>`;
   });
 
   grid.innerHTML = cells;
+  // 一个月可能占4~6周，行数不固定；按实际周数把可用高度均分，
+  // 页面本身才能永远不用滑动，不会因为某些月份行数多就溢出。
+  const weeks = Math.ceil((leadBlanks + rows.length) / 7);
+  grid.style.gridTemplateRows = `repeat(${weeks}, 1fr)`;
 }
 
 window.initHistory = initHistory;

@@ -124,6 +124,56 @@ main {
 .view { display: none; }
 .view.active { display: block; }
 
+/* 记录页/历史页整屏不滑动：外层按 fitFlatViewHeight() 实测写死高度，
+   内部用 flex 把固定元素（标题/hero/月历头/图例）定高，
+   剩下一块（当前这餐 / 日历格）flex:1 吃掉剩余空间，
+   food-list 自己留一道 overflow-y:auto 兜底，避免万一超出反而裁掉内容。 */
+.view[data-view="record"].active,
+.view[data-view="history"].active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.view[data-view="record"] .today-label,
+.view[data-view="record"] .hero-card,
+.view[data-view="record"] .other-meals-strip,
+.view[data-view="record"] .burn-row {
+  flex: none;
+}
+.view[data-view="record"] #current-meal-slot {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.view[data-view="record"] #current-meal-slot .meal-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+.view[data-view="record"] #current-meal-slot .food-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.view[data-view="history"] .month-nav,
+.view[data-view="history"] .kpi-row {
+  flex: none;
+}
+.view[data-view="history"] .calendar-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+.view[data-view="history"] .calendar-weekdays { flex: none; }
+.view[data-view="history"] .calendar-grid { flex: 1; min-height: 0; }
+.view[data-view="history"] .calendar-legend { flex: none; }
+
 /* ---- 记录页固定日期标签（不可翻看，只显示今天） ---- */
 .today-label {
   font-size: 13px;
@@ -189,6 +239,14 @@ main {
 }
 .hero-sub b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
+/* 赤字和蛋白质同级并排显示，各自数字一样大、下面配一行小标签 */
+.hero-duo { display: flex; }
+.hero-item { flex: 1; min-width: 0; padding: 0 8px; }
+.hero-item + .hero-item { border-left: 1px solid var(--gridline); }
+.hero-item .hero-value { font-size: 32px; }
+.hero-item .hero-value .unit { font-size: 14px; }
+.hero-item .hero-label { margin-top: 6px; margin-bottom: 0; }
+
 /* ---- kpi row ---- */
 .kpi-row {
   display: grid;
@@ -225,32 +283,10 @@ main {
 .meal-card-head .meal-name { font-size: 15px; font-weight: 600; }
 .meal-card-head .meal-total { font-size: 14px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
-/* 已经过去的时段收起来，只留合计 + 编辑按钮；当前时段照常展开全部条目 */
-.meal-summary { display: none; }
-.meal-card.collapsed .meal-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.meal-card.collapsed .food-list,
-.meal-card.collapsed .add-row,
-.meal-card.collapsed .preview-row {
-  display: none;
-}
-.meal-summary-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.meal-edit-btn {
-  flex: none;
-  border: 1px solid var(--border);
-  background: var(--page);
-  color: var(--text-secondary);
-  border-radius: 999px;
-  padding: 5px 12px;
+.empty-note {
   font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 0;
 }
 
 .food-item {
@@ -331,26 +367,47 @@ main {
   color: var(--text-muted);
 }
 
-/* ---- field card (消耗) ---- */
-.field-card {
+/* ---- 其他时段小横条（点开进 meal-detail 覆盖层） ---- */
+.other-meals-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.other-meal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.other-meal-name { flex: none; width: 40px; text-align: left; font-weight: 600; color: var(--text-primary); }
+.other-meal-val { flex: 1; min-width: 0; text-align: left; font-variant-numeric: tabular-nums; }
+.other-meal-arrow { flex: none; color: var(--text-muted); }
+
+/* ---- 消耗（运动）一行 ---- */
+.burn-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
-  margin-bottom: 12px;
+  padding: 10px 14px;
 }
-.field-item label {
-  display: block;
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
-}
-.field-item input {
-  width: 100%;
+.burn-row label { font-size: 13px; color: var(--text-secondary); }
+.burn-row input {
+  width: 110px;
+  text-align: right;
   border: 1px solid var(--border);
   background: var(--page);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   font-size: 16px;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
@@ -384,7 +441,6 @@ main {
   gap: 4px;
 }
 .cal-day {
-  aspect-ratio: 1;
   border-radius: 10px;
   display: flex;
   flex-direction: column;

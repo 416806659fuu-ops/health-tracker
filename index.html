@@ -29,25 +29,31 @@
 
 <main id="app-root" style="display:none;">
 
-  <!-- 记录页：只做"现在进行时"，不提供翻看以往日期的入口 -->
+  <!-- 记录页：只做"现在进行时"，整页不滑动。只有当前时段那一餐展开完整录入，
+       其余三餐收成底下一条小横条，点了弹出详情层editable。 -->
   <section class="view" data-view="record">
     <div class="today-label" id="today-label"></div>
 
     <div class="hero-card">
-      <div class="hero-label">今日热量赤字</div>
-      <div class="hero-value" id="hero-value">0<span class="unit">kcal</span></div>
-      <div class="hero-sub">
-        <span>蛋白质 <b id="hero-protein">0</b> g</span>
+      <div class="hero-duo">
+        <div class="hero-item">
+          <div class="hero-value" id="hero-value">0<span class="unit">kcal</span></div>
+          <div class="hero-label">热量赤字</div>
+        </div>
+        <div class="hero-item">
+          <div class="hero-value" id="hero-protein-value">0<span class="unit">g</span></div>
+          <div class="hero-label">蛋白质摄入</div>
+        </div>
       </div>
     </div>
 
-    <div id="meal-cards"></div>
+    <div id="current-meal-slot"></div>
 
-    <div class="field-card">
-      <div class="field-item">
-        <label for="field-burn">消耗（运动，kcal）</label>
-        <input type="number" inputmode="decimal" id="field-burn" placeholder="0">
-      </div>
+    <div class="other-meals-strip" id="other-meals-strip"></div>
+
+    <div class="burn-row">
+      <label for="field-burn">消耗（运动）</label>
+      <input type="number" inputmode="decimal" id="field-burn" placeholder="0 kcal">
     </div>
   </section>
 
@@ -180,6 +186,24 @@
     <h2 id="detail-title"></h2>
   </div>
   <div id="detail-body" class="detail-body"></div>
+</div>
+
+<!-- 某一餐的完整录入详情（从记录页底下"其他时段"条目点进来） -->
+<div id="meal-detail" class="detail-overlay" style="display:none;">
+  <div class="detail-header">
+    <button id="meal-detail-back" aria-label="返回">‹</button>
+    <h2 id="meal-detail-title"></h2>
+  </div>
+  <div class="detail-body" id="meal-detail-body"></div>
+</div>
+
+<!-- 历史页点某一天，看当天的摄入明细（只读） -->
+<div id="day-detail" class="detail-overlay" style="display:none;">
+  <div class="detail-header">
+    <button id="day-detail-back" aria-label="返回">‹</button>
+    <h2 id="day-detail-title"></h2>
+  </div>
+  <div class="detail-body" id="day-detail-body"></div>
 </div>
 
 <div class="toast" id="toast"></div>
