@@ -4,6 +4,57 @@ const CACHE_KEY = 'health-tracker-cache-v3';
 // 可能还躺着没来得及保存的摄入记录，所以新版读不到 v3 时会回头去读 v2，
 // 缺的字段用默认值补齐。第一次 cacheLocally() 之后就自动写成 v3 了。
 const LEGACY_CACHE_KEYS = ['health-tracker-cache-v2'];
+// 从哪一天开始有没上传的本机记录（'YYYY-MM-DD'）；没有积压时这个键不存在。
+// 必须持久化：长期离线时关掉 app 再打开，也得知道「本机还有 X 天没传」，
+// 更重要的是启动时靠它判断绝不能拿服务器数据覆盖本机。
+const DIRTY_KEY = 'health-tracker-dirty-since';
+
+// ---- IndexedDB 镜像：localStorage 的第二保险 ----
+// 记录是每天的命根子，只靠 localStorage 一份不放心（系统空间紧张时
+// 可能被回收）。每次写缓存时同步镜像一份到 IndexedDB，
+// 读的时候 localStorage 坏了/没了就回退读这份。
+const IDB_NAME = 'health-tracker-idb';
+const IDB_STORE = 'state';
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbSet(raw) {
+  return idbOpen()
+    .then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(raw, 'state');
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    }))
+    .catch(() => { /* IDB 不可用就算了，localStorage 那份还在 */ });
+}
+
+function idbGet() {
+  return idbOpen()
+    .then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const rq = tx.objectStore(IDB_STORE).get('state');
+      rq.onsuccess = () => { db.close(); resolve(rq.result || null); };
+      rq.onerror = () => { db.close(); reject(rq.error); };
+    }))
+    .catch(() => null);
+}
+
+// IndexedDB 在个别环境下会「既不成功也不报错」地干挂着（比如某些隐私模式），
+// 镜像只是保险，绝不允许它拖住启动：超时就当作没有这份数据。
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
 
 // 后端是 Google Apps Script + Google Sheet。地址和密码不写死在代码里
 // （这份代码要发布到公开的 GitHub Pages，写死的话谁都能看到源码里的密码），
@@ -34,13 +85,16 @@ function defaultState() {
 let state = defaultState();
 let dirty = false;
 let offline = false;
+let dirtySince = localStorage.getItem(DIRTY_KEY);
 
 function cacheLocally() {
+  const raw = JSON.stringify(state);
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(state));
+    localStorage.setItem(CACHE_KEY, raw);
   } catch (e) {
     /* 存储满了也不影响主流程 */
   }
+  idbSet(raw);
 }
 
 function loadLocalCache() {
@@ -54,6 +108,17 @@ function loadLocalCache() {
     }
   }
   return null;
+}
+
+// localStorage 没有或者坏了，退回读 IndexedDB 镜像
+async function loadIdbCache() {
+  const raw = await withTimeout(idbGet(), 1500, null);
+  if (!raw) return null;
+  try {
+    return mergeIntoDefaults(JSON.parse(raw));
+  } catch (e) {
+    return null;
+  }
 }
 
 // 把任意一份（可能是旧版、可能缺字段的）数据补齐成完整结构。
@@ -74,6 +139,8 @@ function mergeIntoDefaults(parsed) {
 // 前者要引导你去填地址，后者才是真的离线。
 let notConfigured = false;
 
+// 只有「全新设备、本机什么都没有」时才走这条阻塞路径：
+// 问一次配置、等服务器把数据拉下来。平时启动都走本地优先，不等网络。
 async function bootState() {
   try {
     const { url, token } = getApiConfig();
@@ -91,52 +158,100 @@ async function bootState() {
     cacheLocally();
   } catch (e) {
     offline = true;
-    const cached = loadLocalCache();
-    if (cached) state = cached;
-    showOfflineBanner();
   }
 }
 
-function showOfflineBanner() {
-  const bar = document.getElementById('save-bar');
-  bar.dataset.offline = '1';
+// 后台静默同步检查：本地优先启动后偷偷跑一次，任何失败都不打扰使用。
+// 超时要设短——封锁环境下请求往往是挂着不动而不是快速失败，
+// 不设超时的话状态栏会一直停在旧文案。
+async function refreshFromServer() {
+  const url = localStorage.getItem('api_url');
+  const token = localStorage.getItem('api_token');
+  if (!url || !token) {
+    notConfigured = true;
+    showConfigHint();
+    return;
+  }
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(`${url}?token=${encodeURIComponent(token)}`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('bad status');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    offline = false;
+    if (dirtySince) {
+      // 本机有没上传的记录：绝不能拿服务器数据覆盖本机。
+      // （服务器那份此刻是旧的；等用户点「上传」把本机推上去。）
+      updateSaveBar('dirty');
+      return;
+    }
+    state = mergeIntoDefaults(data);
+    cacheLocally();
+    switchView(currentViewName()); // 用最新数据重画当前页
+    updateSaveBar('synced');
+  } catch (e) {
+    offline = true;
+    updateSaveBar(dirtySince ? 'dirty' : 'local');
+  }
+}
+
+function currentViewName() {
+  const active = document.querySelector('.tab-bar button.active');
+  return active ? active.dataset.tab : 'record';
+}
+
+function showConfigHint() {
   const status = document.getElementById('save-status');
-  const hasCache = !!loadLocalCache();
-
-  if (notConfigured) {
-    status.textContent = '还没连后端，点这里设置';
-    status.style.cursor = 'pointer';
-    status.onclick = () => {
-      localStorage.removeItem('api_url');
-      localStorage.removeItem('api_token');
-      location.reload();
-    };
-  } else if (hasCache) {
-    status.textContent = '离线：无法连接服务器，正在用本机缓存';
-  } else {
-    status.textContent = '无法连接服务器，且本机没有缓存';
-  }
+  status.textContent = '还没连后端，点这里设置';
+  status.style.cursor = 'pointer';
+  status.onclick = () => {
+    localStorage.removeItem('api_url');
+    localStorage.removeItem('api_token');
+    location.reload();
+  };
 }
 
-// ---- 未保存修改的标记 + 保存条 ----
+// ---- 本机记录 / 上传条 ----
+// 语义：记录永远先落在本机（写缓存+IndexedDB 镜像），「上传」是独立的
+// 主动动作，攒一个月再传也没关系。所以积压不是需要焦虑的红色警告，
+// 只是一个平静的事实陈述。
 function markDirty() {
   dirty = true;
+  if (!dirtySince) {
+    dirtySince = todayKey();
+    localStorage.setItem(DIRTY_KEY, dirtySince);
+  }
   cacheLocally();
   updateSaveBar('dirty');
 }
 
-function updateSaveBar(mode, extra) {
+// 从第一条没上传的记录那天到今天，一共积压了几天（含两端）
+function pendingDays() {
+  if (!dirtySince) return 0;
+  const ms = new Date(todayKey() + 'T00:00:00') - new Date(dirtySince + 'T00:00:00');
+  return Math.max(0, Math.round(ms / 86400000)) + 1;
+}
+
+function pendingLabel() {
+  const d = pendingDays();
+  if (d <= 1) return '已记录到本机 · 今天的记录未上传';
+  return `已记录到本机 · 积压 ${d} 天未上传`;
+}
+
+function updateSaveBar(mode) {
   const bar = document.getElementById('save-bar');
   const status = document.getElementById('save-status');
   bar.dataset.mode = mode;
-  if (mode === 'dirty') status.textContent = '有未保存的修改';
-  else if (mode === 'saving') status.textContent = '保存中…';
-  else if (mode === 'saved') {
-    const t = new Date();
-    const hh = String(t.getHours()).padStart(2, '0');
-    const mm = String(t.getMinutes()).padStart(2, '0');
-    status.textContent = `已保存 · ${hh}:${mm}`;
-  } else if (mode === 'error') status.textContent = extra || '保存失败，请检查服务器，点击重试';
+  const t = new Date();
+  const hhmm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  if (mode === 'dirty') status.textContent = pendingLabel();
+  else if (mode === 'saving') status.textContent = '上传中…';
+  else if (mode === 'saved') status.textContent = `已上传 · ${hhmm}`;
+  else if (mode === 'synced') status.textContent = `已同步 · ${hhmm}`;
+  else if (mode === 'local') status.textContent = '使用本机数据';
+  else if (mode === 'error') status.textContent = '上传失败 · 记录仍在本机，稍后再试';
   else status.textContent = '';
 }
 
@@ -155,21 +270,15 @@ async function syncToServer() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     offline = false;
-    document.getElementById('save-bar').dataset.offline = '';
     dirty = false;
+    dirtySince = null;
+    localStorage.removeItem(DIRTY_KEY);
     updateSaveBar('saved');
   } catch (e) {
     offline = true;
     updateSaveBar('error');
   }
 }
-
-window.addEventListener('beforeunload', (e) => {
-  if (dirty) {
-    e.preventDefault();
-    e.returnValue = '';
-  }
-});
 
 function todayKey() {
   const d = new Date();
@@ -334,7 +443,14 @@ window.addEventListener('resize', () => requestAnimationFrame(fitFlatViewHeight)
 window.addEventListener('orientationchange', () => setTimeout(() => requestAnimationFrame(fitFlatViewHeight), 120));
 
 async function boot() {
-  await bootState();
+  // 本地优先：本机有数据就立刻用它渲染（秒开），网络检查放到后台。
+  // 封锁/离线环境下打开不再卡在「加载中」等一个连不上的服务器。
+  const cached = loadLocalCache() || (await loadIdbCache());
+  if (cached) {
+    state = cached;
+  } else {
+    await bootState();
+  }
 
   document.querySelectorAll('.tab-bar button[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -362,11 +478,28 @@ async function boot() {
   });
 
   switchView('record');
-  updateSaveBar(offline ? 'error' : 'saved');
-  if (offline) showOfflineBanner();
+
+  if (dirtySince) {
+    dirty = true;
+    updateSaveBar('dirty');
+  } else if (cached) {
+    updateSaveBar('local');
+  } else if (notConfigured) {
+    showConfigHint();
+  } else {
+    updateSaveBar(offline ? 'local' : 'synced');
+  }
 
   document.getElementById('app-loading').style.display = 'none';
   document.getElementById('app-root').style.display = '';
+
+  // 后台静默检查云端（本机有积压时只更新文案，绝不覆盖本机数据）
+  if (cached) refreshFromServer();
+
+  // 向系统申请持久化存储，降低长期离线时本机数据被回收的概率；不支持就算了
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(() => {});
+  }
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});

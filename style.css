@@ -97,9 +97,13 @@ body {
   font-size: 13px;
   color: var(--text-secondary);
 }
-.save-bar[data-mode="dirty"] #save-status { color: var(--critical); }
+/* 「积压未上传」是常态而不是事故——本地优先的设计里记录本来就先落在本机，
+   所以用平静的次要色，不用红色制造焦虑。红色只留给真正的上传失败。 */
+.save-bar[data-mode="dirty"] #save-status { color: var(--text-secondary); }
 .save-bar[data-mode="saving"] #save-status { color: var(--text-secondary); }
-.save-bar[data-mode="saved"] #save-status { color: var(--good); }
+.save-bar[data-mode="saved"] #save-status,
+.save-bar[data-mode="synced"] #save-status { color: var(--good); }
+.save-bar[data-mode="local"] #save-status { color: var(--text-secondary); }
 .save-bar[data-mode="error"] #save-status { color: var(--critical); font-weight: 600; }
 .save-bar button {
   border: none;

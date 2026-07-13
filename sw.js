@@ -1,4 +1,4 @@
-const CACHE = 'health-tracker-v4';
+const CACHE = 'health-tracker-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -36,15 +36,21 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(event.request));
     return;
   }
-  // 静态文件用「网络优先」：在线时永远拿最新代码，只有离线才退回缓存，
-  // 避免每次改代码都要手动清缓存/记得改版本号。
+  // 静态文件用「缓存优先 + 后台更新」：有缓存就立刻响应（离线/封锁环境下
+  // 秒开，网络优先在墙内会挂几十秒才失败），同时后台去拿新版本写进缓存，
+  // 下一次打开生效。代价是代码更新要多打开一次才能看到，可以接受。
   event.respondWith(
-    fetch(event.request)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-        return res;
-      })
-      .catch(() => caches.match(event.request))
+    caches.match(event.request).then((cached) => {
+      const network = fetch(event.request)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+          }
+          return res;
+        })
+        .catch(() => cached);
+      return cached || network;
+    })
   );
 });

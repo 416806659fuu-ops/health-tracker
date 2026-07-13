@@ -20,8 +20,8 @@
     <h1 id="page-title">摄入记录</h1>
   </header>
   <div class="save-bar" id="save-bar">
-    <span id="save-status">已保存</span>
-    <button id="save-btn">保存</button>
+    <span id="save-status"></span>
+    <button id="save-btn">上传</button>
   </div>
 </div>
 
@@ -137,7 +137,7 @@
         <input type="file" id="import-input" accept="application/json" style="display:none;">
       </label>
       <button class="settings-btn danger" id="clear-btn">清空全部数据</button>
-      <p class="settings-note">数据保存在 Google Sheet 里（通过 Google Apps Script 读写），只要能联网，手机/iPad/Mac 打开同一个地址看到的都是同一份，不需要和电脑连同一个 WiFi。改动后记得点顶部的「保存」，看到「已保存」才算真正写进去了。</p>
+      <p class="settings-note">记录会先存在这台设备的浏览器本地，离线也能照常记录，长期不上传也不会丢（但清除浏览器数据会把本机记录一起清掉，长期离线期间千万别清）。点顶部的「上传」会把本机数据推送到 Google Sheet 云端，作为备份、也让其他设备能看到最新记录——攒多少天再传都可以。</p>
     </div>
 
     <div class="settings-section">
