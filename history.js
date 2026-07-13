@@ -96,6 +96,12 @@ function renderHistory() {
       rows.push({ date: dateKey, day: d, hasData: false, future: true, deficit: null });
       continue;
     }
+    if (dateKey === today) {
+      // 今天还在进行中，数字会一直大幅波动：不计入月总赤字，也不算「达成」，
+      // 日历上跟无记录的日子一样按灰色显示（点进去仍能看到实时的当日明细）。
+      rows.push({ date: dateKey, day: d, hasData: false, future: false, deficit: null });
+      continue;
+    }
     const day = getDay(dateKey);
     const hasData = totalIntake(day) > 0 || Number(day.burn) > 0;
     rows.push({ date: dateKey, day: d, hasData, future: false, deficit: hasData ? dayDeficit(day) : null });

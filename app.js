@@ -318,13 +318,16 @@ function fitFlatViewHeight() {
   const frame = document.getElementById('phone-screen'); // 预览壳里量壳内高度，真机上量视口
   const viewportH = frame ? frame.clientHeight : window.innerHeight;
   const stickyTop = document.querySelector('.sticky-top');
-  const tabBar = document.querySelector('.tab-bar');
   const mainEl = document.getElementById('app-root');
   const topH = stickyTop ? stickyTop.offsetHeight : 0;
-  const tabH = tabBar ? tabBar.offsetHeight : 0;
   const mainStyle = mainEl ? getComputedStyle(mainEl) : null;
   const mainPad = mainStyle ? parseFloat(mainStyle.paddingTop) + parseFloat(mainStyle.paddingBottom) : 0;
-  active.style.height = `${Math.max(200, viewportH - topH - tabH - mainPad)}px`;
+  // 底部导航栏是 position:fixed，真正给它让位的是 body 自己的 padding-bottom
+  // （见 style.css）。这里不能再单独量一次 tab-bar 高度去减——
+  // 两处各量一次很容易对不上，多出的差值就是那一点点还能滑动的缝。
+  // 统一只认 body 这一份 padding，才不会有两边不一致的问题。
+  const bodyPadBottom = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
+  active.style.height = `${Math.max(200, viewportH - topH - mainPad - bodyPadBottom)}px`;
 }
 
 window.addEventListener('resize', () => requestAnimationFrame(fitFlatViewHeight));

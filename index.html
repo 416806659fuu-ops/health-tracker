@@ -53,7 +53,11 @@
 
     <div class="burn-row">
       <label for="field-burn">消耗（运动）</label>
-      <input type="number" inputmode="decimal" id="field-burn" placeholder="0 kcal">
+      <div class="burn-input-group">
+        <span class="burn-preview" id="burn-preview"></span>
+        <input type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" id="field-burn" placeholder="0 或算式，如 300+50">
+        <button class="burn-confirm-btn" id="field-burn-confirm" aria-label="确认">✓</button>
+      </div>
     </div>
   </section>
 
@@ -123,12 +127,6 @@
         <input type="number" id="setting-extra">
       </div>
       <div class="settings-sum" id="setting-sum"></div>
-    </div>
-
-    <div class="settings-section">
-      <h2>训练项目</h2>
-      <button class="settings-btn" id="open-catalog-btn">编辑 A / B 训练计划</button>
-      <p class="settings-note">设定每个计划里练什么、多重、每次加减多少、几组。</p>
     </div>
 
     <div class="settings-section">

@@ -174,12 +174,39 @@ function initRecord() {
   });
 
   document.getElementById('field-burn').addEventListener('input', (e) => {
-    const day = ensureDay(todayKey());
-    const v = e.target.value;
-    day.burn = v === '' ? null : Number(v);
-    markDirty();
-    renderHero();
+    const preview = document.getElementById('burn-preview');
+    const val = evalCalExpr(e.target.value);
+    preview.textContent = val === null ? '' : `= ${fmt(val)} kcal`;
   });
+  document.getElementById('field-burn').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitBurn();
+    }
+  });
+  document.getElementById('field-burn-confirm').addEventListener('click', commitBurn);
+}
+
+// 消耗输入跟卡路里/蛋白质一样支持算式，但它改的是当天唯一的一个数字
+// （不是往列表里加条目），所以确认后直接把结果写回输入框，而不是清空。
+function commitBurn() {
+  const input = document.getElementById('field-burn');
+  const v = input.value.trim();
+  const day = ensureDay(todayKey());
+  if (v === '') {
+    day.burn = null;
+  } else {
+    const val = evalCalExpr(v);
+    if (val === null) {
+      input.focus();
+      return;
+    }
+    day.burn = val;
+    input.value = fmt(val);
+  }
+  markDirty();
+  document.getElementById('burn-preview').textContent = '';
+  renderHero();
 }
 
 function openMealDetail(mealKey) {
